@@ -172,7 +172,10 @@ def update_dashboard(n_clicks, api_key, api_secret, passphrase, start_date, end_
         if end_date:
             df_filtered = df_filtered[df_filtered['Data Final DT'] <= pd.to_datetime(end_date)]
     else:
-        df_filtered = pd.DataFrame()
+        df_filtered = pd.DataFrame(columns=[
+            'Lucro (sats)', 'Taxas', 'Lucro Líquido (sats)', 'Rentabilidade (%)',
+            'Data Final', 'Data Inicial', 'Lucro Acumulado'
+        ])
 
     if df_filtered.empty:
         cards = html.Div(html.P("⚠️ Nenhuma ordem fechada encontrada no período selecionado.", style={"fontSize": "18px"}))
@@ -261,9 +264,11 @@ def update_dashboard(n_clicks, api_key, api_secret, passphrase, start_date, end_
         ])
 
     if df_open.empty:
+        df_open = pd.DataFrame(columns=df.columns)  # mesmas colunas da tabela de ordens fechadas
+
+    if df_open.empty:
         open_table = html.P("📌 Nenhuma ordem aberta encontrada.", style={"fontSize": "18px"})
     else:
-        df_open = df_open.drop(columns=['Data Final DT'], errors='ignore')
         open_table = html.Div([
             html.H4("📌 Ordens Abertas"),
             dash_table.DataTable(
@@ -276,6 +281,7 @@ def update_dashboard(n_clicks, api_key, api_secret, passphrase, start_date, end_
                 filter_action='none'
             )
         ])
+
 
     return table, min_date, max_date, cards, open_table, graph
 
