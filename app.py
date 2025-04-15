@@ -148,118 +148,118 @@ def fetch_data(api_key, api_secret, passphrase, trade_type):
 )
 def update_dashboard(n_clicks, api_key, api_secret, passphrase, start_date, end_date):
     if not n_clicks:
-        return html.P("🔒 Insira suas credenciais e clique em CONSULTAR para carregar os dados.", style={"fontSize": "18px"}), None, None, None, None, None
+        return html.P("🔒 Insira suas credenciais e clique em CONSULTAR para carregar os dados.", style={"fontSize": "18px"}), datetime(2025, 1, 1).date(), datetime.today().date(), None, None, None
 
     if not api_key or not api_secret or not passphrase:
-        return html.P("🔒 Insira suas credenciais de API acima.", style={"fontSize": "18px"}), None, None, None, None, None
+        return html.P("🔒 Insira suas credenciais de API acima.", style={"fontSize": "18px"}), datetime(2025, 1, 1).date(), datetime.today().date(), None, None, None
 
     df = fetch_data(api_key, api_secret, passphrase, "closed")
     df_open = fetch_data(api_key, api_secret, passphrase, "running")
 
-    # Verificação de ausência total de dados
     if df.empty and df_open.empty:
-        return html.P("❌ Nenhum dado retornado da API para ordens fechadas ou abertas.", style={"fontSize": "18px"}), None, None, None, None, None
+        return html.P("❌ Nenhum dado retornado da API para ordens fechadas ou abertas.", style={"fontSize": "18px"}), datetime(2025, 1, 1).date(), datetime.today().date(), None, None, None
 
-    # Dados fechados
-    if df.empty:
-        table = html.P("📁 Nenhuma ordem fechada encontrada.", style={"fontSize": "18px"})
-        cards = html.Div()
-        graph = html.Div()
-        min_date = None
-        max_date = None
-    else:
-        df['Data Final DT'] = pd.to_datetime(df['Data Final'], format='%d/%m/%Y')
-        min_date = df['Data Final DT'].min().date()
-        max_date = df['Data Final DT'].max().date()
+    min_date = datetime(2025, 1, 1).date()
+    max_date = datetime.today().date()
 
+    if not df.empty:
+        df['Data Final DT'] = pd.to_datetime(df['Data Final'], format='%d/%m/%Y', errors='coerce')
+        df['Data Inicial DT'] = pd.to_datetime(df['Data Inicial'], format='%d/%m/%Y', errors='coerce')
+
+        df_filtered = df.copy()
         if start_date:
-            df = df[df['Data Final DT'] >= pd.to_datetime(start_date)]
+            df_filtered = df_filtered[df_filtered['Data Final DT'] >= pd.to_datetime(start_date)]
         if end_date:
-            df = df[df['Data Final DT'] <= pd.to_datetime(end_date)]
+            df_filtered = df_filtered[df_filtered['Data Final DT'] <= pd.to_datetime(end_date)]
+    else:
+        df_filtered = pd.DataFrame()
 
-        total_orders = df.shape[0]
-        total_gains = df[df['Lucro Líquido (sats)'] >= 0].shape[0]
-        total_losses = df[df['Lucro Líquido (sats)'] < 0].shape[0]
+    if df_filtered.empty:
+        cards = html.Div(html.P("⚠️ Nenhuma ordem fechada encontrada no período selecionado.", style={"fontSize": "18px"}))
+        graph = html.Div(html.P("📉 Nenhum dado disponível para gerar o gráfico.", style={"fontSize": "18px"}))
+        table = html.P("📁 Nenhuma ordem fechada encontrada no período selecionado.", style={"fontSize": "18px"})
+    else:
+        total_orders = df_filtered.shape[0]
+        total_gains = df_filtered[df_filtered['Lucro Líquido (sats)'] >= 0].shape[0]
+        total_losses = df_filtered[df_filtered['Lucro Líquido (sats)'] < 0].shape[0]
         winrate = (total_gains / total_orders * 100) if total_orders else 0
 
+        cards = html.Div([
+            html.H4("📊 Resumo"),
+            dbc.Row([
+                dbc.Col(dbc.Card([
+                    dbc.CardHeader("Lucro total (satoshis)", className="fs-5 fw-bold"),
+                    dbc.CardBody(html.H4(f"{df_filtered['Lucro (sats)'].sum():,.0f}", className="fw-bold"))
+                ], color="orange", inverse=True), width=3),
+                dbc.Col(dbc.Card([
+                    dbc.CardHeader("Total de taxas (satoshis)", className="fs-5 fw-bold"),
+                    dbc.CardBody(html.H4(f"{df_filtered['Taxas'].sum():,.0f}", className="fw-bold"))
+                ], color="secondary", inverse=True), width=3),
+                dbc.Col(dbc.Card([
+                    dbc.CardHeader("Lucro líquido (satoshis)", className="fs-5 fw-bold"),
+                    dbc.CardBody(html.H4(f"{df_filtered['Lucro Líquido (sats)'].sum():,.0f}", className="fw-bold"))
+                ], color="orange", inverse=True), width=3),
+                dbc.Col(dbc.Card([
+                    dbc.CardHeader("Rentabilidade média", className="fs-5 fw-bold"),
+                    dbc.CardBody(html.H4(f"{df_filtered['Rentabilidade (%)'].mean():.2f}%", className="fw-bold"))
+                ], color="info", inverse=True), width=3),
+            ], className="mb-4"),
+            html.Br(),
+            dbc.Row([
+                dbc.Col(dbc.Card([
+                    dbc.CardHeader("Total de Ordens", className="fs-5 fw-bold"),
+                    dbc.CardBody(html.H4(f"{total_orders}", className="fw-bold"))
+                ], color="dark", inverse=True), width=3),
+                dbc.Col(dbc.Card([
+                    dbc.CardHeader("Ganhos", className="fs-5 fw-bold"),
+                    dbc.CardBody(html.H4(f"{total_gains}", className="fw-bold"))
+                ], color="success", inverse=True), width=3),
+                dbc.Col(dbc.Card([
+                    dbc.CardHeader("Perdas", className="fs-5 fw-bold"),
+                    dbc.CardBody(html.H4(f"{total_losses}", className="fw-bold"))
+                ], color="danger", inverse=True), width=3),
+                dbc.Col(dbc.Card([
+                    dbc.CardHeader("Aproveitamento", className="fs-5 fw-bold"),
+                    dbc.CardBody(html.H4(f"{winrate:.2f}%", className="fw-bold"))
+                ], color="info", inverse=True), width=3),
+            ], className="mb-4")
+        ])
 
-    cards = html.Div([
-        html.H4("📊 Resumo"),
-        dbc.Row([
-            dbc.Col(dbc.Card([
-                dbc.CardHeader("Lucro total (satoshis)", className="fs-5 fw-bold"),
-                dbc.CardBody(html.H4(f"{df['Lucro (sats)'].sum():,.0f}", className="fw-bold"))
-            ], color="orange", inverse=True), width=3),
-            dbc.Col(dbc.Card([
-                dbc.CardHeader("Total de taxas (satoshis)", className="fs-5 fw-bold"),
-                dbc.CardBody(html.H4(f"{df['Taxas'].sum():,.0f}", className="fw-bold"))
-            ], color="secondary", inverse=True), width=3),
-            dbc.Col(dbc.Card([
-                dbc.CardHeader("Lucro líquido (satoshis)", className="fs-5 fw-bold"),
-                dbc.CardBody(html.H4(f"{df['Lucro Líquido (sats)'].sum():,.0f}", className="fw-bold"))
-            ], color="orange", inverse=True), width=3),
-            dbc.Col(dbc.Card([
-                dbc.CardHeader("Rentabilidade média", className="fs-5 fw-bold"),
-                dbc.CardBody(html.H4(f"{df['Rentabilidade (%)'].mean():.2f}%", className="fw-bold"))
-            ], color="info", inverse=True), width=3),
-        ], className="mb-4"),
-        html.Br(),
-        dbc.Row([
-            dbc.Col(dbc.Card([
-                dbc.CardHeader("Total de Ordens", className="fs-5 fw-bold"),
-                dbc.CardBody(html.H4(f"{total_orders}", className="fw-bold"))
-            ], color="dark", inverse=True), width=3),
-            dbc.Col(dbc.Card([
-                dbc.CardHeader("Ganhos", className="fs-5 fw-bold"),
-                dbc.CardBody(html.H4(f"{total_gains}", className="fw-bold"))
-            ], color="success", inverse=True), width=3),
-            dbc.Col(dbc.Card([
-                dbc.CardHeader("Perdas", className="fs-5 fw-bold"),
-                dbc.CardBody(html.H4(f"{total_losses}", className="fw-bold"))
-            ], color="danger", inverse=True), width=3),
-            dbc.Col(dbc.Card([
-                dbc.CardHeader("Aproveitamento", className="fs-5 fw-bold"),
-                dbc.CardBody(html.H4(f"{winrate:.2f}%", className="fw-bold"))
-            ], color="info", inverse=True), width=3),
-        ], className="mb-4")
-    ])
+        df_graph = df_filtered.groupby('Data Final DT', as_index=False)['Lucro Acumulado'].max()
+        full_range = pd.date_range(df_graph['Data Final DT'].min(), df_graph['Data Final DT'].max())
+        df_graph = df_graph.set_index('Data Final DT').reindex(full_range).rename_axis('Data Final DT').fillna(method='ffill').reset_index()
+        df_graph['Data Final'] = df_graph['Data Final DT'].dt.strftime('%d/%m')
 
-    df_graph = df.groupby('Data Final DT', as_index=False)['Lucro Acumulado'].max()
-    full_range = pd.date_range(df_graph['Data Final DT'].min(), df_graph['Data Final DT'].max())
-    df_graph = df_graph.set_index('Data Final DT').reindex(full_range).rename_axis('Data Final DT').fillna(method='ffill').reset_index()
-    df_graph['Data Final'] = df_graph['Data Final DT'].dt.strftime('%d/%m')
-
-    fig = px.line(df_graph, x="Data Final", y="Lucro Acumulado", markers=True)
-    fig.update_traces(line_shape='spline', line=dict(color='#F29727'))
-    fig.update_layout(
-        xaxis=dict(color='#FFFFFF', showgrid=False),
-        yaxis=dict(color='#FFFFFF', showticklabels=False, showgrid=False),
-        plot_bgcolor=custom_theme['background'],
-        paper_bgcolor=custom_theme['background'],
-        font=dict(color='#FFFFFF'),
-        margin=dict(l=40, r=40, t=30, b=40)
-    )
-
-    graph = html.Div([
-        html.H4("📈 Lucro Acumulado ao Longo do Tempo"),
-        dcc.Graph(figure=fig, config={"displayModeBar": False})
-    ])
-
-    df = df.drop(columns=['Data Final DT'], errors='ignore')
-    table = html.Div([
-        html.H4("📁 Ordens Fechadas"),
-        dash_table.DataTable(
-            data=df.to_dict('records'),
-            columns=[{"name": i, "id": i} for i in df.columns],
-            style_table={'overflowX': 'auto'},
-            style_cell={'backgroundColor': custom_theme['background'], 'color': custom_theme['font_color']},
-            style_header={'backgroundColor': custom_theme['accent'], 'color': 'white', 'fontWeight': 'bold'},
-            sort_action='native',
-            filter_action='none'
+        fig = px.line(df_graph, x="Data Final", y="Lucro Acumulado", markers=True)
+        fig.update_traces(line_shape='spline', line=dict(color='#F29727'))
+        fig.update_layout(
+            xaxis=dict(color='#FFFFFF', showgrid=False),
+            yaxis=dict(color='#FFFFFF', showticklabels=False, showgrid=False),
+            plot_bgcolor=custom_theme['background'],
+            paper_bgcolor=custom_theme['background'],
+            font=dict(color='#FFFFFF'),
+            margin=dict(l=40, r=40, t=30, b=40)
         )
-    ])
 
-    # Dados abertos
+        graph = html.Div([
+            html.H4("📈 Lucro Acumulado ao Longo do Tempo"),
+            dcc.Graph(figure=fig, config={"displayModeBar": False})
+        ])
+
+        df_filtered = df_filtered.drop(columns=['Data Final DT', 'Data Inicial DT'], errors='ignore')
+        table = html.Div([
+            html.H4("📁 Ordens Fechadas"),
+            dash_table.DataTable(
+                data=df_filtered.to_dict('records'),
+                columns=[{"name": i, "id": i} for i in df_filtered.columns],
+                style_table={'overflowX': 'auto'},
+                style_cell={'backgroundColor': custom_theme['background'], 'color': custom_theme['font_color']},
+                style_header={'backgroundColor': custom_theme['accent'], 'color': 'white', 'fontWeight': 'bold'},
+                sort_action='native',
+                filter_action='none'
+            )
+        ])
+
     if df_open.empty:
         open_table = html.P("📌 Nenhuma ordem aberta encontrada.", style={"fontSize": "18px"})
     else:
