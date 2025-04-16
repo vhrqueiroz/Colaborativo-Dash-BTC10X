@@ -54,6 +54,7 @@ app.layout = dbc.Container([
     ], justify="center", className="mb-4"),
 
     html.Div(id='cards_container'),
+    html.Div(id='graph_bar_container'),
     html.Div(id='table_container'),
     html.Div(id='graph_container'),
     html.Div(id='open_table_container')
@@ -82,6 +83,10 @@ def fetch_data(api_key, api_secret, passphrase, trade_type):
     }
 
     response = requests.get(url, headers=headers, params=params)
+    
+    if response.status_code != 200:
+        return "Credenciais inválidas"  # Mensagem de erro para credenciais inválidas    
+    
     if response.status_code == 200:
         data = response.json()
         df = pd.DataFrame(data)
@@ -131,7 +136,6 @@ def fetch_data(api_key, api_secret, passphrase, trade_type):
     else:
         return pd.DataFrame()
 
-
 @app.callback(
     Output('table_container', 'children'),
     Output('date_filter', 'min_date_allowed'),
@@ -139,6 +143,7 @@ def fetch_data(api_key, api_secret, passphrase, trade_type):
     Output('cards_container', 'children'),
     Output('open_table_container', 'children'),
     Output('graph_container', 'children'),
+    Output('graph_bar_container', 'children'),
     Input('load_data', 'n_clicks'),
     State('api_key', 'value'),
     State('api_secret', 'value'),
@@ -148,16 +153,22 @@ def fetch_data(api_key, api_secret, passphrase, trade_type):
 )
 def update_dashboard(n_clicks, api_key, api_secret, passphrase, start_date, end_date):
     if not n_clicks:
-        return html.P("🔒 Insira suas credenciais e clique em CONSULTAR para carregar os dados.", style={"fontSize": "28px"}), None, None, None, None, None
+        return html.P("🔒 Insira suas credenciais e clique em CONSULTAR para carregar os dados.", style={"fontSize": "28px"}), None, None, None, None, None, None
 
     if not api_key or not api_secret or not passphrase:
-        return html.P("🔒 Insira suas credenciais de API acima.", style={"fontSize": "28px"}), None, None, None, None, None
+        return html.P("🔒 Insira suas credenciais de API acima.", style={"fontSize": "28px"}), None, None, None, None, None, None
 
     df = fetch_data(api_key, api_secret, passphrase, "closed")
+
+    # Caso as credenciais sejam inválidas, exibe a mensagem de erro
+    if isinstance(df, str) and df == "Credenciais inválidas":
+        return html.P("❌ Credenciais inválidas. Verifique suas credenciais.", style={"fontSize": "28px"}), None, None, None, None, None, None
+
     df_open = fetch_data(api_key, api_secret, passphrase, "running")
 
+    # Verificando se há dados para o período selecionado
     if df.empty and df_open.empty:
-        return html.P("❌ Não há ordens abertas ou fechadas para o período selecionado.", style={"fontSize": "28px"}), None, None, None, None, None
+        return html.P("❌ Não há dados para o período selecionado.", style={"fontSize": "28px"}), None, None, None, None, None, None
 
     df['Data Final DT'] = pd.to_datetime(df['Data Final'], format='%d/%m/%Y')
 
@@ -172,63 +183,63 @@ def update_dashboard(n_clicks, api_key, api_secret, passphrase, start_date, end_
 
     # Verificando se o DataFrame está vazio após o filtro de data
     if df.empty:
-        return html.P(f"❌ Não há dados para o período selecionado", style={"fontSize": "28px"}), None, None, None, None, None
+        return html.P(f"❌ Não há dados para o período selecionado", style={"fontSize": "28px"}), None, None, None, None, None, None
 
     total_orders = df.shape[0]
     total_gains = df[df['Lucro Líquido (sats)'] >= 0].shape[0]
     total_losses = df[df['Lucro Líquido (sats)'] < 0].shape[0]
     winrate = (total_gains / total_orders * 100) if total_orders else 0
 
-
     cards = html.Div([
         html.H4("📊 Resumo"),
-        dbc.Row([
-            dbc.Col(dbc.Card([
+        dbc.Row([  # Cartões de resumo
+            dbc.Col(dbc.Card([  # Cartão de Lucro Total
                 dbc.CardHeader("Lucro total (satoshis)", className="fs-5 fw-bold"),
                 dbc.CardBody(html.H4(f"{df['Lucro (sats)'].sum():,.0f}", className="fw-bold"))
             ], color="orange", inverse=True), width=3),
-            dbc.Col(dbc.Card([
+            dbc.Col(dbc.Card([  # Cartão de Total de Taxas
                 dbc.CardHeader("Total de taxas (satoshis)", className="fs-5 fw-bold"),
                 dbc.CardBody(html.H4(f"{df['Taxas'].sum():,.0f}", className="fw-bold"))
             ], color="secondary", inverse=True), width=3),
-            dbc.Col(dbc.Card([
+            dbc.Col(dbc.Card([  # Cartão de Lucro Líquido
                 dbc.CardHeader("Lucro líquido (satoshis)", className="fs-5 fw-bold"),
                 dbc.CardBody(html.H4(f"{df['Lucro Líquido (sats)'].sum():,.0f}", className="fw-bold"))
             ], color="orange", inverse=True), width=3),
-            dbc.Col(dbc.Card([
+            dbc.Col(dbc.Card([  # Cartão de Rentabilidade Média
                 dbc.CardHeader("Rentabilidade média", className="fs-5 fw-bold"),
                 dbc.CardBody(html.H4(f"{df['Rentabilidade (%)'].mean():.2f}%", className="fw-bold"))
             ], color="info", inverse=True), width=3),
         ], className="mb-4"),
         html.Br(),
-        dbc.Row([
-            dbc.Col(dbc.Card([
+        dbc.Row([  # Cartões de total de ordens
+            dbc.Col(dbc.Card([  # Cartão de Total de Ordens
                 dbc.CardHeader("Total de Ordens", className="fs-5 fw-bold"),
                 dbc.CardBody(html.H4(f"{total_orders}", className="fw-bold"))
             ], color="dark", inverse=True), width=3),
-            dbc.Col(dbc.Card([
+            dbc.Col(dbc.Card([  # Cartão de Ganhos
                 dbc.CardHeader("Ganhos", className="fs-5 fw-bold"),
                 dbc.CardBody(html.H4(f"{total_gains}", className="fw-bold"))
             ], color="success", inverse=True), width=3),
-            dbc.Col(dbc.Card([
+            dbc.Col(dbc.Card([  # Cartão de Perdas
                 dbc.CardHeader("Perdas", className="fs-5 fw-bold"),
                 dbc.CardBody(html.H4(f"{total_losses}", className="fw-bold"))
             ], color="danger", inverse=True), width=3),
-            dbc.Col(dbc.Card([
+            dbc.Col(dbc.Card([  # Cartão de Aproveitamento
                 dbc.CardHeader("Aproveitamento", className="fs-5 fw-bold"),
                 dbc.CardBody(html.H4(f"{winrate:.2f}%", className="fw-bold"))
             ], color="info", inverse=True), width=3),
         ], className="mb-4")
     ])
 
+    # Gráfico de Lucro Acumulado ao Longo do Tempo
     df_graph = df.groupby('Data Final DT', as_index=False)['Lucro Acumulado'].max()
     full_range = pd.date_range(df_graph['Data Final DT'].min(), df_graph['Data Final DT'].max())
     df_graph = df_graph.set_index('Data Final DT').reindex(full_range).rename_axis('Data Final DT').fillna(method='ffill').reset_index()
     df_graph['Data Final'] = df_graph['Data Final DT'].dt.strftime('%d/%m')
 
-    fig = px.line(df_graph, x="Data Final", y="Lucro Acumulado", markers=True)
-    fig.update_traces(line_shape='spline', line=dict(color='#F29727'))
-    fig.update_layout(
+    fig_line = px.line(df_graph, x="Data Final", y="Lucro Acumulado", markers=True)
+    fig_line.update_traces(line_shape='spline', line=dict(color='#F29727'))
+    fig_line.update_layout(
         xaxis=dict(color='#FFFFFF', showgrid=False),
         yaxis=dict(color='#FFFFFF', showticklabels=False, showgrid=False),
         plot_bgcolor=custom_theme['background'],
@@ -237,9 +248,49 @@ def update_dashboard(n_clicks, api_key, api_secret, passphrase, start_date, end_
         margin=dict(l=40, r=40, t=30, b=40)
     )
 
-    graph = html.Div([
+    graph_line = html.Div([
         html.H4("📈 Lucro Acumulado ao Longo do Tempo"),
-        dcc.Graph(figure=fig, config={"displayModeBar": False})
+        dcc.Graph(figure=fig_line, config={"displayModeBar": False})
+    ])
+
+    # Gráfico de barras - Lucro Total por Mês
+    df_monthly = df.groupby(df['Data Final DT'].dt.to_period('M')).agg({'Lucro (sats)': 'sum'}).reset_index()
+    df_monthly['Data Final'] = df_monthly['Data Final DT'].dt.strftime('%b %Y')  # Exibe o nome do mês e ano
+
+    # Tradução dos meses para português
+    month_translation = {
+        'Jan': 'Jan', 'Feb': 'Fev', 'Mar': 'Mar', 'Apr': 'Abr', 'May': 'Mai', 'Jun': 'Jun',
+        'Jul': 'Jul', 'Aug': 'Ago', 'Sep': 'Set', 'Oct': 'Out', 'Nov': 'Nov', 'Dec': 'Dez'
+    }
+    df_monthly['Data Final'] = df_monthly['Data Final'].apply(lambda x: month_translation[x[:3]] + x[3:])
+
+    # Criando o gráfico de barras com cor laranja e sem gradiente
+    fig_bar = px.bar(df_monthly, x="Data Final", y="Lucro (sats)", color_discrete_sequence=['#F29727'])  # Cor laranja
+
+    # Adicionando rótulos de dados nas barras com a cor branca
+    fig_bar.update_traces(text=df_monthly['Lucro (sats)'].apply(lambda x: f'{x:,.0f}'),
+                        textposition='outside',  # Posiciona o texto fora das barras
+                        textfont=dict(size=12, color='white'))  # Rótulo em branco
+
+    # Removendo o gradiente de valor
+    fig_bar.update_traces(marker=dict(color='#F29727'))  # Cor sólida laranja
+
+    # Alterando o tamanho do gráfico e centralizando
+    fig_bar.update_layout(
+        width=600,  # Diminui o tamanho pela metade
+        height=400,  # Diminui o tamanho pela metade
+        margin=dict(l=40, r=40, t=40, b=40),  # Ajustando a margem para centralizar o gráfico
+        xaxis=dict(color='#FFFFFF', showgrid=False, title='', tickmode='array', tickvals=df_monthly['Data Final'], ticktext=df_monthly['Data Final']),
+        yaxis=dict(color='#FFFFFF', showgrid=False, title='', showticklabels=True),
+        plot_bgcolor=custom_theme['background'],
+        paper_bgcolor=custom_theme['background'],
+        font=dict(color='#FFFFFF'),
+    )
+
+    # Exibindo o gráfico
+    graph_bar = html.Div([
+        html.H4("📊 Lucro Total por Mês"),
+        dcc.Graph(figure=fig_bar, config={"displayModeBar": False})
     ])
 
     df = df.drop(columns=['Data Final DT'], errors='ignore')
@@ -278,14 +329,15 @@ def update_dashboard(n_clicks, api_key, api_secret, passphrase, start_date, end_
                 data=df.to_dict('records'),
                 columns=[{"name": i, "id": i} for i in df.columns],
                 style_table={'overflowX': 'auto'},
-                style_cell={'backgroundColor': custom_theme['background'], 'color': custom_theme['font_color']},
+                style_cell={'backgroundColor': custom_theme['background'], 'color': '#FFFFFF'},
                 style_header={'backgroundColor': custom_theme['accent'], 'color': 'white', 'fontWeight': 'bold'},
                 sort_action='native',
                 filter_action='none'
             )
         ])
 
-    return table, min_date, max_date, cards, open_table, graph
+    return table, min_date, max_date, cards, open_table, graph_line, graph_bar
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
